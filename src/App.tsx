@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { FileUpload } from './components/FileUpload';
-import { parseExcelFile, exportToExcel, ProcessedRow } from './utils/excelParser';
-import { Search, Filter, Trash2, FileSpreadsheet, UploadCloud, Download } from 'lucide-react';
+import { ManageOptionsModal } from './components/ManageOptionsModal';
+import { parseExcelFile, exportToExcel, exportSummaryToExcel, ProcessedRow } from './utils/excelParser';
+import { Search, Filter, Trash2, FileSpreadsheet, UploadCloud, Download, Settings2, LayoutList, Layers } from 'lucide-react';
 
 export default function App() {
   const [data, setData] = useState<ProcessedRow[]>([]);
@@ -9,6 +10,9 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [targetObjectFilter, setTargetObjectFilter] = useState('');
   const [targetOrgFilter, setTargetOrgFilter] = useState('');
+  
+  const [viewMode, setViewMode] = useState<'detail' | 'summary'>('detail');
+  const [isManageModalOpen, setIsManageModalOpen] = useState(false);
 
   const handleUpload = async (files: File[]) => {
     const allNewData: ProcessedRow[] = [];
@@ -35,6 +39,23 @@ export default function App() {
     setSearchQuery('');
     setTargetObjectFilter('');
     setTargetOrgFilter('');
+    setViewMode('detail');
+  };
+
+  const renameTargetObject = (oldName: string, newName: string) => {
+    if (!newName || oldName === newName) return;
+    setData((prev) =>
+      prev.map((row) => (row.targetObject === oldName ? { ...row, targetObject: newName } : row))
+    );
+    if (targetObjectFilter === oldName) setTargetObjectFilter(newName);
+  };
+
+  const renameTargetOrg = (oldName: string, newName: string) => {
+    if (!newName || oldName === newName) return;
+    setData((prev) =>
+      prev.map((row) => (row.targetOrg === oldName ? { ...row, targetOrg: newName } : row))
+    );
+    if (targetOrgFilter === oldName) setTargetOrgFilter(newName);
   };
 
   const uniqueTargetObjects = useMemo(() => {
@@ -64,6 +85,18 @@ export default function App() {
     });
   }, [data, targetObjectFilter, targetOrgFilter, searchQuery]);
 
+  const summaryData = useMemo(() => {
+    const map = new Map<string, { targetObject: string; targetOrg: string; count: number }>();
+    filteredData.forEach((row) => {
+      const key = `${row.targetObject}|${row.targetOrg}`;
+      if (!map.has(key)) {
+        map.set(key, { targetObject: row.targetObject, targetOrg: row.targetOrg, count: 0 });
+      }
+      map.get(key)!.count += 1;
+    });
+    return Array.from(map.values()).sort((a, b) => b.count - a.count);
+  }, [filteredData]);
+
   // Define the fixed columns
   const fixedColumns = ['适用对象', '适用组织', '文件名'];
 
@@ -80,7 +113,7 @@ export default function App() {
           {data.length > 0 && (
             <div className="flex items-center gap-3">
               <button
-                onClick={() => exportToExcel(filteredData, columns)}
+                onClick={() => viewMode === 'detail' ? exportToExcel(filteredData, columns) : exportSummaryToExcel(summaryData)}
                 className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors"
                 title="导出当前筛选后的数据"
               >
@@ -106,6 +139,33 @@ export default function App() {
           </div>
         ) : (
           <div className="space-y-4">
+            
+            {/* View Mode Tabs */}
+            <div className="flex items-center gap-2 border-b border-slate-200">
+              <button
+                onClick={() => setViewMode('detail')}
+                className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                  viewMode === 'detail'
+                    ? 'border-indigo-600 text-indigo-600'
+                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                }`}
+              >
+                <LayoutList className="w-4 h-4" />
+                明细数据
+              </button>
+              <button
+                onClick={() => setViewMode('summary')}
+                className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                  viewMode === 'summary'
+                    ? 'border-indigo-600 text-indigo-600'
+                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                }`}
+              >
+                <Layers className="w-4 h-4" />
+                汇总去重数据
+              </button>
+            </div>
+
             {/* Toolbar */}
             <div className="flex flex-col sm:flex-row gap-4 items-center justify-between bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
               <div className="flex flex-1 gap-4 w-full flex-col sm:flex-row">
@@ -147,64 +207,103 @@ export default function App() {
                       ))}
                     </select>
                   </div>
+                  
+                  <button
+                    onClick={() => setIsManageModalOpen(true)}
+                    className="flex items-center justify-center p-2 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors border border-slate-200 hover:border-indigo-200"
+                    title="选项管理 (批量重命名)"
+                  >
+                    <Settings2 className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
               
               <div className="text-sm font-medium text-slate-500 whitespace-nowrap bg-slate-50 px-3 py-1.5 rounded-md">
-                共 {filteredData.length} 条数据
+                共 {viewMode === 'detail' ? filteredData.length : summaryData.length} 条数据
               </div>
             </div>
 
             {/* Data Table */}
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col" style={{ maxHeight: 'calc(100vh - 280px)' }}>
+            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col" style={{ maxHeight: 'calc(100vh - 320px)' }}>
               <div className="overflow-auto flex-1">
                 <table className="min-w-full divide-y divide-slate-200 border-collapse">
                   <thead className="bg-slate-50 sticky top-0 z-10 shadow-sm">
-                    <tr>
-                      {fixedColumns.map((col) => (
-                        <th
-                          key={col}
-                          className="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider whitespace-nowrap bg-slate-50 border-b border-slate-200"
-                        >
-                          {col}
-                        </th>
-                      ))}
-                      {columns.map((col) => (
-                        <th
-                          key={col}
-                          className="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider whitespace-nowrap bg-slate-50 border-b border-slate-200"
-                        >
-                          {col}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-slate-100">
-                    {filteredData.map((row) => (
-                      <tr key={row.id} className="hover:bg-indigo-50/50 transition-colors group">
-                        <td className="px-6 py-3 whitespace-nowrap text-sm font-medium text-slate-900 bg-white group-hover:bg-indigo-50/50">
-                          {row.targetObject || '-'}
-                        </td>
-                        <td className="px-6 py-3 whitespace-nowrap text-sm text-slate-600 bg-white group-hover:bg-indigo-50/50">
-                          {row.targetOrg || '-'}
-                        </td>
-                        <td className="px-6 py-3 whitespace-nowrap text-sm text-slate-400 bg-white group-hover:bg-indigo-50/50">
-                          {row.fileName}
-                        </td>
-                        {columns.map((col) => (
-                          <td
-                            key={`${row.id}-${col}`}
-                            className="px-6 py-3 whitespace-nowrap text-sm text-slate-600"
+                    {viewMode === 'detail' ? (
+                      <tr>
+                        {fixedColumns.map((col) => (
+                          <th
+                            key={col}
+                            className="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider whitespace-nowrap bg-slate-50 border-b border-slate-200"
                           >
-                            {row[col] || '-'}
-                          </td>
+                            {col}
+                          </th>
+                        ))}
+                        {columns.map((col) => (
+                          <th
+                            key={col}
+                            className="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider whitespace-nowrap bg-slate-50 border-b border-slate-200"
+                          >
+                            {col}
+                          </th>
                         ))}
                       </tr>
-                    ))}
-                    {filteredData.length === 0 && (
+                    ) : (
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider whitespace-nowrap bg-slate-50 border-b border-slate-200">
+                          适用对象
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider whitespace-nowrap bg-slate-50 border-b border-slate-200">
+                          适用组织
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-semibold text-slate-600 uppercase tracking-wider whitespace-nowrap bg-slate-50 border-b border-slate-200">
+                          匹配条数
+                        </th>
+                      </tr>
+                    )}
+                  </thead>
+                  <tbody className="bg-white divide-y divide-slate-100">
+                    {viewMode === 'detail' ? (
+                      filteredData.map((row) => (
+                        <tr key={row.id} className="hover:bg-indigo-50/50 transition-colors group">
+                          <td className="px-6 py-3 whitespace-nowrap text-sm font-medium text-slate-900 bg-white group-hover:bg-indigo-50/50">
+                            {row.targetObject || '-'}
+                          </td>
+                          <td className="px-6 py-3 whitespace-nowrap text-sm text-slate-600 bg-white group-hover:bg-indigo-50/50">
+                            {row.targetOrg || '-'}
+                          </td>
+                          <td className="px-6 py-3 whitespace-nowrap text-sm text-slate-400 bg-white group-hover:bg-indigo-50/50">
+                            {row.fileName}
+                          </td>
+                          {columns.map((col) => (
+                            <td
+                              key={`${row.id}-${col}`}
+                              className="px-6 py-3 whitespace-nowrap text-sm text-slate-600"
+                            >
+                              {row[col] || '-'}
+                            </td>
+                          ))}
+                        </tr>
+                      ))
+                    ) : (
+                      summaryData.map((row, idx) => (
+                        <tr key={`${row.targetObject}-${row.targetOrg}-${idx}`} className="hover:bg-indigo-50/50 transition-colors">
+                          <td className="px-6 py-3 whitespace-nowrap text-sm font-medium text-slate-900">
+                            {row.targetObject || '-'}
+                          </td>
+                          <td className="px-6 py-3 whitespace-nowrap text-sm text-slate-600">
+                            {row.targetOrg || '-'}
+                          </td>
+                          <td className="px-6 py-3 whitespace-nowrap text-sm font-semibold text-indigo-600">
+                            {row.count}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                    
+                    {((viewMode === 'detail' && filteredData.length === 0) || (viewMode === 'summary' && summaryData.length === 0)) && (
                       <tr>
                         <td
-                          colSpan={fixedColumns.length + columns.length}
+                          colSpan={viewMode === 'detail' ? fixedColumns.length + columns.length : 3}
                           className="px-6 py-16 text-center text-slate-500 bg-slate-50/50"
                         >
                           <div className="flex flex-col items-center justify-center">
@@ -242,6 +341,15 @@ export default function App() {
           </div>
         )}
       </main>
+
+      <ManageOptionsModal
+        isOpen={isManageModalOpen}
+        onClose={() => setIsManageModalOpen(false)}
+        targetObjects={uniqueTargetObjects}
+        targetOrgs={uniqueTargetOrgs}
+        onRenameObject={renameTargetObject}
+        onRenameOrg={renameTargetOrg}
+      />
     </div>
   );
 }

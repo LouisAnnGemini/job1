@@ -124,3 +124,16 @@ export const exportToExcel = (data: ProcessedRow[], columns: string[], filename:
   XLSX.utils.book_append_sheet(workbook, worksheet, "合并数据");
   XLSX.writeFile(workbook, filename);
 };
+
+export const exportSummaryToExcel = (summaryData: { targetObject: string; targetOrg: string; count: number }[], filename: string = '汇总数据导出.xlsx') => {
+  const exportData = summaryData.map(row => ({
+    '适用对象': row.targetObject || '',
+    '适用组织': row.targetOrg || '',
+    '匹配条数': row.count
+  }));
+
+  const worksheet = XLSX.utils.json_to_sheet(exportData);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "汇总数据");
+  XLSX.writeFile(workbook, filename);
+};
