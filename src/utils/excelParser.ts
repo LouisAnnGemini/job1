@@ -32,23 +32,29 @@ export const parseExcelFile = async (file: File): Promise<ParseResult> => {
         const row1 = jsonData[0] || [];
         const row2 = jsonData[1] || [];
 
-        let targetObject = '';
+        let targetObjectRaw = '';
         if (row1[1]) {
-          targetObject = String(row1[1]).trim();
+          targetObjectRaw = String(row1[1]).trim();
         } else if (row1[0] && String(row1[0]).includes(':')) {
-          targetObject = String(row1[0]).split(':')[1]?.trim() || '';
+          targetObjectRaw = String(row1[0]).split(':')[1]?.trim() || '';
         } else if (row1[0] && String(row1[0]).includes('：')) {
-          targetObject = String(row1[0]).split('：')[1]?.trim() || '';
+          targetObjectRaw = String(row1[0]).split('：')[1]?.trim() || '';
         }
 
-        let targetOrg = '';
+        let targetOrgRaw = '';
         if (row2[1]) {
-          targetOrg = String(row2[1]).trim();
+          targetOrgRaw = String(row2[1]).trim();
         } else if (row2[0] && String(row2[0]).includes(':')) {
-          targetOrg = String(row2[0]).split(':')[1]?.trim() || '';
+          targetOrgRaw = String(row2[0]).split(':')[1]?.trim() || '';
         } else if (row2[0] && String(row2[0]).includes('：')) {
-          targetOrg = String(row2[0]).split('：')[1]?.trim() || '';
+          targetOrgRaw = String(row2[0]).split('：')[1]?.trim() || '';
         }
+
+        const targetObjects = targetObjectRaw.split(/[,，、]/).map(s => s.trim()).filter(Boolean);
+        if (targetObjects.length === 0) targetObjects.push('');
+
+        const targetOrgs = targetOrgRaw.split(/[,，、]/).map(s => s.trim()).filter(Boolean);
+        if (targetOrgs.length === 0) targetOrgs.push('');
 
         const row3 = jsonData[2] || [];
         const headerCounts: Record<string, number> = {};
@@ -72,24 +78,29 @@ export const parseExcelFile = async (file: File): Promise<ParseResult> => {
         const processedRows: ProcessedRow[] = [];
 
         rows.forEach((row, index) => {
-          const rowData: ProcessedRow = {
-            id: `${file.name}-${index}-${Date.now()}`,
-            fileName: file.name,
-            targetObject,
-            targetOrg,
-          };
-
           let hasData = false;
+          const rowDataTemplate: any = {};
+          
           finalHeaders.forEach((header, colIndex) => {
             if (header) {
               const val = String(row[colIndex] || '').trim();
-              rowData[header] = val;
+              rowDataTemplate[header] = val;
               if (val) hasData = true;
             }
           });
 
           if (hasData) {
-            processedRows.push(rowData);
+            targetObjects.forEach((tObj, objIdx) => {
+              targetOrgs.forEach((tOrg, orgIdx) => {
+                processedRows.push({
+                  id: `${file.name}-${index}-${objIdx}-${orgIdx}-${Date.now()}`,
+                  fileName: file.name,
+                  targetObject: tObj,
+                  targetOrg: tOrg,
+                  ...rowDataTemplate
+                });
+              });
+            });
           }
         });
 
