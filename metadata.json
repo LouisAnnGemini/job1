@@ -1,0 +1,5 @@
+{
+  "name": "Excel Batch Formatter",
+  "description": "A tool to batch process and format Excel files, extracting classification info and providing search/filter capabilities.",
+  "requestFramePermissions": []
+}
