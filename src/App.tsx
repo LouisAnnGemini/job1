@@ -1,17 +1,19 @@
 import React, { useState, useMemo } from 'react';
 import { FileUpload } from './components/FileUpload';
 import { ManageOptionsModal } from './components/ManageOptionsModal';
+import { MultiSelect } from './components/MultiSelect';
+import { MermaidGraph } from './components/MermaidGraph';
 import { parseExcelFile, exportToExcel, exportSummaryToExcel, ProcessedRow } from './utils/excelParser';
-import { Search, Filter, Trash2, FileSpreadsheet, UploadCloud, Download, Settings2, LayoutList, Layers } from 'lucide-react';
+import { Search, Filter, Trash2, FileSpreadsheet, UploadCloud, Download, Settings2, LayoutList, Layers, Network } from 'lucide-react';
 
 export default function App() {
   const [data, setData] = useState<ProcessedRow[]>([]);
   const [columns, setColumns] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [targetObjectFilter, setTargetObjectFilter] = useState('');
-  const [targetOrgFilter, setTargetOrgFilter] = useState('');
+  const [targetObjectFilter, setTargetObjectFilter] = useState<string[]>([]);
+  const [targetOrgFilter, setTargetOrgFilter] = useState<string[]>([]);
   
-  const [viewMode, setViewMode] = useState<'detail' | 'summary'>('detail');
+  const [viewMode, setViewMode] = useState<'detail' | 'summary' | 'graph'>('detail');
   const [isManageModalOpen, setIsManageModalOpen] = useState(false);
 
   const handleUpload = async (files: File[]) => {
@@ -37,8 +39,8 @@ export default function App() {
     setData([]);
     setColumns([]);
     setSearchQuery('');
-    setTargetObjectFilter('');
-    setTargetOrgFilter('');
+    setTargetObjectFilter([]);
+    setTargetOrgFilter([]);
     setViewMode('detail');
   };
 
@@ -47,7 +49,9 @@ export default function App() {
     setData((prev) =>
       prev.map((row) => (row.targetObject === oldName ? { ...row, targetObject: newName } : row))
     );
-    if (targetObjectFilter === oldName) setTargetObjectFilter(newName);
+    if (targetObjectFilter.includes(oldName)) {
+      setTargetObjectFilter((prev) => [...prev.filter((p) => p !== oldName), newName]);
+    }
   };
 
   const renameTargetOrg = (oldName: string, newName: string) => {
@@ -55,7 +59,9 @@ export default function App() {
     setData((prev) =>
       prev.map((row) => (row.targetOrg === oldName ? { ...row, targetOrg: newName } : row))
     );
-    if (targetOrgFilter === oldName) setTargetOrgFilter(newName);
+    if (targetOrgFilter.includes(oldName)) {
+      setTargetOrgFilter((prev) => [...prev.filter((p) => p !== oldName), newName]);
+    }
   };
 
   const uniqueTargetObjects = useMemo(() => {
@@ -69,9 +75,9 @@ export default function App() {
   const filteredData = useMemo(() => {
     return data.filter((row) => {
       // 1. Filter by Target Object
-      if (targetObjectFilter && row.targetObject !== targetObjectFilter) return false;
+      if (targetObjectFilter.length > 0 && !targetObjectFilter.includes(row.targetObject)) return false;
       // 2. Filter by Target Org
-      if (targetOrgFilter && row.targetOrg !== targetOrgFilter) return false;
+      if (targetOrgFilter.length > 0 && !targetOrgFilter.includes(row.targetOrg)) return false;
       // 3. Search Query
       if (searchQuery) {
         const query = searchQuery.toLowerCase();
@@ -164,6 +170,17 @@ export default function App() {
                 <Layers className="w-4 h-4" />
                 汇总去重数据
               </button>
+              <button
+                onClick={() => setViewMode('graph')}
+                className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+                  viewMode === 'graph'
+                    ? 'border-indigo-600 text-indigo-600'
+                    : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                }`}
+              >
+                <Network className="w-4 h-4" />
+                可视化流程视图
+              </button>
             </div>
 
             {/* Toolbar */}
@@ -183,29 +200,21 @@ export default function App() {
                 <div className="flex items-center gap-3 w-full sm:w-auto">
                   <div className="flex items-center gap-2 flex-1 sm:flex-none">
                     <Filter className="w-4 h-4 text-slate-400 hidden sm:block" />
-                    <select
-                      value={targetObjectFilter}
-                      onChange={(e) => setTargetObjectFilter(e.target.value)}
-                      className="w-full sm:w-auto border border-slate-300 rounded-lg py-2 pl-3 pr-8 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white"
-                    >
-                      <option value="">所有适用对象</option>
-                      {uniqueTargetObjects.map((obj) => (
-                        <option key={obj} value={obj}>{obj}</option>
-                      ))}
-                    </select>
+                    <MultiSelect
+                      options={uniqueTargetObjects}
+                      selected={targetObjectFilter}
+                      onChange={setTargetObjectFilter}
+                      placeholder="适用对象"
+                    />
                   </div>
 
                   <div className="flex items-center gap-2 flex-1 sm:flex-none">
-                    <select
-                      value={targetOrgFilter}
-                      onChange={(e) => setTargetOrgFilter(e.target.value)}
-                      className="w-full sm:w-auto border border-slate-300 rounded-lg py-2 pl-3 pr-8 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white"
-                    >
-                      <option value="">所有适用组织</option>
-                      {uniqueTargetOrgs.map((org) => (
-                        <option key={org} value={org}>{org}</option>
-                      ))}
-                    </select>
+                    <MultiSelect
+                      options={uniqueTargetOrgs}
+                      selected={targetOrgFilter}
+                      onChange={setTargetOrgFilter}
+                      placeholder="适用组织"
+                    />
                   </div>
                   
                   <button
@@ -223,10 +232,13 @@ export default function App() {
               </div>
             </div>
 
-            {/* Data Table */}
+            {/* Data Table / Graph */}
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col" style={{ maxHeight: 'calc(100vh - 320px)' }}>
-              <div className="overflow-auto flex-1">
-                <table className="min-w-full divide-y divide-slate-200 border-collapse">
+              {viewMode === 'graph' ? (
+                <MermaidGraph data={filteredData} columns={columns} />
+              ) : (
+                <div className="overflow-auto flex-1">
+                  <table className="min-w-full divide-y divide-slate-200 border-collapse">
                   <thead className="bg-slate-50 sticky top-0 z-10 shadow-sm">
                     {viewMode === 'detail' ? (
                       <tr>
@@ -317,6 +329,7 @@ export default function App() {
                   </tbody>
                 </table>
               </div>
+              )}
             </div>
             
             {/* Add more files button */}

@@ -83,9 +83,9 @@ export const parseExcelFile = async (file: File): Promise<ParseResult> => {
           
           finalHeaders.forEach((header, colIndex) => {
             if (header) {
-              const val = String(row[colIndex] || '').trim();
+              const val = String(row[colIndex] || '');
               rowDataTemplate[header] = val;
-              if (val) hasData = true;
+              if (val.trim()) hasData = true;
             }
           });
 
